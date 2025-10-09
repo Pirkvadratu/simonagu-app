@@ -1,0 +1,19 @@
+// firebase/firebaseConfig.js
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBbDGo_7qoLdoGxYKLww5ePX0NSIzPFQfo",
+  authDomain: "whatshappeningapp-75e08.firebaseapp.com",
+  projectId: "whatshappeningapp-75e08",
+  storageBucket: "whatshappeningapp-75e08.firebasestorage.app",
+  messagingSenderId: "420951565337",
+  appId: "1:420951565337:web:9d61e335040d06c6b87688",
+  measurementId: "G-ZLC89WWLQT"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+// Export Firebase Auth (for login/signup)
+export const auth = getAuth(app);

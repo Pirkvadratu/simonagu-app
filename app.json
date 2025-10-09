@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "simonagu-app",
-    "slug": "simonagu-app",
+    "name": "Whats Happening",
+    "slug": "whats-happening",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "simonaguapp",
+    "scheme": "simonaguapp-scheme",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
