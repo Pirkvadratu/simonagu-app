@@ -1,4 +1,3 @@
-// firebase/firebaseConfig.js
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 
@@ -12,8 +11,6 @@ const firebaseConfig = {
   measurementId: "G-ZLC89WWLQT"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Export Firebase Auth (for login/signup)
 export const auth = getAuth(app);
