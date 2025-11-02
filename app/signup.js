@@ -1,19 +1,43 @@
-import React, { useState } from 'react';
-import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
-import { auth } from '../firebase/firebaseConfig';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'expo-router';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useState } from 'react';
+import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { auth } from '../firebase/firebaseConfig';
+
+//NEW IMPORTS for Firestore
+import { db } from '../firebase/firebaseConfig';
+import { doc, setDoc } from 'firebase/firestore';
 
 export default function SignupScreen() {
+  // NEW STATE for name
+  const [name, setName] = useState('');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
 
+  //UPDATED handle Signup to create Firestore profile
   const handleSignup = async () => {
+    if (!name || !email || !password) {
+      setError("Please fill all fields.");
+      return;
+    }
+
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      router.push('/login'); // redirect to login after signup
+      // Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      //Create Firestore profile document
+      await setDoc(doc(db, 'profiles', user.uid), {
+        name: name,
+        email: user.email,
+        createdAt: new Date(),
+      });
+
+      //Redirect to login
+      router.push('/login');
     } catch (err) {
       setError(err.message);
     }
@@ -22,6 +46,14 @@ export default function SignupScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Signup</Text>
+
+      <TextInput
+        placeholder="Name"
+        value={name}
+        onChangeText={setName}
+        style={styles.input}
+      />
+
       <TextInput
         placeholder="Email"
         value={email}
@@ -37,6 +69,7 @@ export default function SignupScreen() {
         secureTextEntry
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
       <Button title="Signup" onPress={handleSignup} />
       <Button title="Go to Login" onPress={() => router.push('/login')} />
     </View>
