@@ -1,38 +1,90 @@
 // app/events/index.tsx
 
-import React, { useEffect, useState, useRef } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  FlatList,
-  StyleSheet,
-  Button,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import { auth, db } from "@/firebase/firebaseConfig";
+import * as Location from "expo-location";
 import {
   collection,
-  query,
   deleteDoc,
   doc,
-  onSnapshot,
   getDoc,
+  onSnapshot,
+  query,
 } from "firebase/firestore";
-import { db, auth } from "@/firebase/firebaseConfig";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Button,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import MapView, { Marker } from "react-native-maps";
 
 export default function EventsScreen() {
   const [events, setEvents] = useState<any[]>([]);
   const [filtered, setFiltered] = useState<any[]>([]);
+  const [sortedEvents, setSortedEvents] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [personality, setPersonality] = useState<any | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   const mapRef = useRef<MapView>(null);
 
   // ------------------------------
-  // 1. LOAD PERSONALITY FILTER
+  // DISTANCE CALCULATION (Haversine formula)
+  // ------------------------------
+  const calculateDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in kilometers
+  };
+
+  // ------------------------------
+  // 1. GET USER LOCATION
+  // ------------------------------
+  useEffect(() => {
+    async function getUserLocation() {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          console.log("Location permission denied");
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({});
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+      } catch (error) {
+        console.error("Error getting user location:", error);
+      }
+    }
+    getUserLocation();
+  }, []);
+
+  // ------------------------------
+  // 2. LOAD PERSONALITY FILTER
   // ------------------------------
   useEffect(() => {
     async function loadPersonality() {
@@ -48,7 +100,7 @@ export default function EventsScreen() {
   }, []);
 
   // ------------------------------
-  // 2. LOAD EVENTS (User + API)
+  // 3. LOAD EVENTS (User + API)
   // ------------------------------
   useEffect(() => {
     const q = query(collection(db, "events"));
@@ -68,7 +120,7 @@ export default function EventsScreen() {
   }, []);
 
   // ----------------------------------------------------
-  // 3. APPLY PERSONALITY FILTER WITH SAFE FALLBACK
+  // 4. APPLY PERSONALITY FILTER WITH SAFE FALLBACK
   // ----------------------------------------------------
   useEffect(() => {
     if (!personality) {
@@ -111,7 +163,7 @@ export default function EventsScreen() {
   }, [events, personality]);
 
   // ------------------------------
-  // 4. SEARCH FILTER
+  // 5. SEARCH FILTER
   // ------------------------------
   useEffect(() => {
     if (!search) {
@@ -125,6 +177,40 @@ export default function EventsScreen() {
 
     setFiltered(searchResult);
   }, [search]);
+
+  // ------------------------------
+  // 6. SORT EVENTS BY DISTANCE
+  // ------------------------------
+  useEffect(() => {
+    if (!userLocation || filtered.length === 0) {
+      setSortedEvents(filtered);
+      return;
+    }
+
+    const eventsWithDistance = filtered.map((event) => {
+      if (!event.location) {
+        return { ...event, distance: Infinity }; // Events without location go to the end
+      }
+
+      const distance = calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        event.location.latitude,
+        event.location.longitude
+      );
+
+      return { ...event, distance };
+    });
+
+    const sorted = [...eventsWithDistance].sort((a, b) => {
+      // Events without location go to the end
+      if (!a.location) return 1;
+      if (!b.location) return -1;
+      return a.distance - b.distance;
+    });
+
+    setSortedEvents(sorted);
+  }, [filtered, userLocation]);
 
   // ------------------------------
   // MAP FOCUS
@@ -177,7 +263,7 @@ export default function EventsScreen() {
           longitudeDelta: 0.1,
         }}
       >
-        {filtered.map((ev) =>
+        {sortedEvents.map((ev) =>
           ev.location ? (
             <Marker
               key={ev.id}
@@ -190,7 +276,7 @@ export default function EventsScreen() {
       </MapView>
 
       <FlatList
-        data={filtered}
+        data={sortedEvents}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
