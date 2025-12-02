@@ -1,39 +1,79 @@
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Button, Text, View } from 'react-native';
-import { onAuthStateChanged } from 'firebase/auth'; 
-import { auth } from '@/firebase/firebaseConfig';
-export default function Index() {
-  const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { router } from "expo-router";
+import { auth, db } from "../firebase/firebaseConfig";
+import { doc, updateDoc } from "firebase/firestore";
 
-  useEffect(() => {
-    // Listen for authentication state changes
-    const unsubscribe = onAuthStateChanged(auth, (currentUser: any) => {
-      setUser(currentUser);
-    });
+export default function HomeScreen() {
+  async function resetFilters() {
+    const user = auth.currentUser;
+    if (!user) {
+      console.error("No user logged in");
+      return;
+    }
 
-    // Clean up the listener when the component unmounts
-    return unsubscribe;
-  }, []);
+    const userRef = doc(db, "Users", user.uid);
+
+    try {
+      await updateDoc(userRef, { personality: null });
+      alert("Filters cleared!");
+    } catch (error) {
+      console.error("Error resetting filters:", error);
+    }
+  }
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-      <Text style={{ fontSize: 24, marginBottom: 20 }}>Welcome!</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Welcome to What's Happening?</Text>
 
-      {/* Show Login / Sign Up if not logged in */}
-      {!user && (
-        <>
-          <Button title="Login" onPress={() => router.push('/login')} />
-          <View style={{ height: 10 }} />
-          <Button title="Sign Up" onPress={() => router.push('/signup')} />
-        </>
-      )}
+      <TouchableOpacity style={styles.button} onPress={() => router.push("/events")}>
+        <Text style={styles.buttonText}>View Events</Text>
+      </TouchableOpacity>
 
-      {/* Show Profile button if logged in */}
-      {user && (
-        <Button title="Go to Profile" onPress={() => router.push('/profile')} />
-      )}
+      <TouchableOpacity style={styles.button} onPress={() => router.push("/create-events")}>
+        <Text style={styles.buttonText}>Create Event</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.button} onPress={() => router.push("/personality/intro")}>
+        <Text style={styles.buttonText}>Personalize My Events</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: "#C85B5B" }]}
+        onPress={resetFilters}
+      >
+        <Text style={styles.buttonText}>Reset Filters</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.button} onPress={() => router.push("/profile")}>
+        <Text style={styles.buttonText}>My Profile</Text>
+      </TouchableOpacity>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "#fff",
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 40,
+  },
+  button: {
+    padding: 15,
+    backgroundColor: "#1F6C6B",
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  buttonText: {
+    color: "white",
+    fontWeight: "600",
+    textAlign: "center",
+    fontSize: 16,
+  },
+});
