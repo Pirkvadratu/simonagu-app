@@ -15,7 +15,14 @@ export default function PersonalityIntro() {
         style={styles.buttonPrimary}
         onPress={() => router.push("/personality/swipe")}
       >
-        <Text style={styles.buttonPrimaryText}>Start</Text>
+        <Text style={styles.buttonPrimaryText}>Start Test</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.buttonTertiary}
+        onPress={() => router.push("/personality/manual")}
+      >
+        <Text style={styles.buttonTertiaryText}>I already know my type</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -54,6 +61,20 @@ const styles = StyleSheet.create({
   },
   buttonPrimaryText: {
     color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  buttonTertiary: {
+    backgroundColor: "#fff",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#1F6C6B",
+  },
+  buttonTertiaryText: {
+    color: "#1F6C6B",
     fontSize: 16,
     fontWeight: "600",
   },

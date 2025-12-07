@@ -13,6 +13,7 @@ import {
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  ActivityIndicator,
   Button,
   FlatList,
   StyleSheet,
@@ -179,7 +180,62 @@ export default function EventsScreen() {
   }, [search]);
 
   // ------------------------------
-  // 6. SORT EVENTS BY DISTANCE
+  // 6. GROUP EVENTS BY TIME
+  // ------------------------------
+  const groupEventsByTime = (events: any[]) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const weekend = new Date(today);
+    const dayOfWeek = now.getDay();
+    const daysUntilWeekend = dayOfWeek === 0 ? 0 : 6 - dayOfWeek;
+    weekend.setDate(weekend.getDate() + daysUntilWeekend);
+
+    const grouped: { today: any[]; tomorrow: any[]; weekend: any[]; later: any[] } = {
+      today: [],
+      tomorrow: [],
+      weekend: [],
+      later: [],
+    };
+
+    events.forEach((event) => {
+      let eventDate: Date | null = null;
+      
+      // Try different date field names
+      if (event.date?.toDate) {
+        eventDate = event.date.toDate();
+      } else if (event.startDate?.toDate) {
+        eventDate = event.startDate.toDate();
+      } else if (event.eventDate) {
+        eventDate = typeof event.eventDate === 'string' 
+          ? new Date(event.eventDate) 
+          : event.eventDate.toDate?.() || null;
+      }
+
+      if (!eventDate || isNaN(eventDate.getTime())) {
+        grouped.later.push(event);
+        return;
+      }
+
+      const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+      
+      if (eventDay.getTime() === today.getTime()) {
+        grouped.today.push(event);
+      } else if (eventDay.getTime() === tomorrow.getTime()) {
+        grouped.tomorrow.push(event);
+      } else if (eventDay >= weekend && eventDay < new Date(weekend.getTime() + 2 * 24 * 60 * 60 * 1000)) {
+        grouped.weekend.push(event);
+      } else {
+        grouped.later.push(event);
+      }
+    });
+
+    return grouped;
+  };
+
+  // ------------------------------
+  // 7. SORT EVENTS BY DISTANCE
   // ------------------------------
   useEffect(() => {
     if (!userLocation || filtered.length === 0) {
@@ -189,7 +245,7 @@ export default function EventsScreen() {
 
     const eventsWithDistance = filtered.map((event) => {
       if (!event.location) {
-        return { ...event, distance: Infinity }; // Events without location go to the end
+        return { ...event, distance: Infinity };
       }
 
       const distance = calculateDistance(
@@ -203,7 +259,6 @@ export default function EventsScreen() {
     });
 
     const sorted = [...eventsWithDistance].sort((a, b) => {
-      // Events without location go to the end
       if (!a.location) return 1;
       if (!b.location) return -1;
       return a.distance - b.distance;
@@ -237,7 +292,14 @@ export default function EventsScreen() {
     await deleteDoc(doc(db, "events", id));
   };
 
-  if (loading) return <Text style={{ textAlign: "center" }}>Loading…</Text>;
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1F6C6B" />
+        <Text style={styles.loadingText}>Loading events...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -275,27 +337,109 @@ export default function EventsScreen() {
         )}
       </MapView>
 
-      <FlatList
-        data={sortedEvents}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <TouchableOpacity onPress={() => handleFocusEvent(item)}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text>{item.description}</Text>
-              <Text>Category: {item.category || "none"}</Text>
-              <Text>By: {item.userId}</Text>
-            </TouchableOpacity>
+      {/* Group events by time */}
+      {(() => {
+        const groupedEvents = groupEventsByTime(sortedEvents);
+        const displaySections = [
+          { title: "Today", data: groupedEvents.today },
+          { title: "Tomorrow", data: groupedEvents.tomorrow },
+          { title: "This Weekend", data: groupedEvents.weekend },
+          { title: "Later", data: groupedEvents.later },
+        ].filter(section => section.data.length > 0);
 
-            {item.userId === auth.currentUser?.uid && (
-              <Button
-                title="Delete"
-                onPress={() => handleDelete(item.id, item.userId)}
-              />
+        return (
+          <FlatList
+            data={displaySections}
+            keyExtractor={(item, index) => `section-${index}`}
+            renderItem={({ item: section }) => (
+              <View>
+                <Text style={styles.sectionHeader}>
+                  {section.title} ({section.data.length})
+                </Text>
+                {section.data.map((item: any) => {
+                  // Check if event matches personality (same logic as filter)
+                  const isPersonalityMatch = personality && item.category && (() => {
+            const tags = {
+              calm: ["calm", "yoga", "wellness", "relax", "nature"],
+              nightlife: ["nightlife", "party", "club", "festival"],
+              culture: ["culture", "theatre", "museum", "art", "exhibition", "lecture"],
+              social: ["social", "meetup", "community", "food", "cooking"],
+              music: ["music", "concert", "live", "dj"],
+              sport: ["sport", "gym", "run", "fitness"],
+              literature: ["books", "literature", "reading", "poetry"],
+            };
+            const cat = (item.category || "").toLowerCase();
+            // Use same structure as filter
+            if (personality.calm > 0 && tags.calm.includes(cat)) return true;
+            if (personality.nightlife > 0 && tags.nightlife.includes(cat)) return true;
+            if (personality.culture > 0 && tags.culture.includes(cat)) return true;
+            if (personality.social > 0 && tags.social.includes(cat)) return true;
+            if (personality.music > 0 && tags.music.includes(cat)) return true;
+            if (personality.sport > 0 && tags.sport.includes(cat)) return true;
+            if (personality.literature > 0 && tags.literature.includes(cat)) return true;
+                    return false;
+                  })();
+
+                  // Format distance
+                  const distanceText = item.distance !== undefined && item.distance !== Infinity
+                    ? `${item.distance.toFixed(1)} km away`
+                    : item.location
+                    ? "Distance unknown"
+                    : "No location";
+
+                  // Format date if available
+                  const formatDate = (date: any) => {
+                    if (!date) return null;
+                    try {
+                      if (date?.toDate) {
+                        const d = date.toDate();
+                        return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      }
+                      if (typeof date === 'string') {
+                        const d = new Date(date);
+                        return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      }
+                    } catch (e) {
+                      return null;
+                    }
+                    return null;
+                  };
+
+                  const eventDate = formatDate(item.date || item.startDate || item.eventDate);
+
+                  return (
+                    <View key={item.id} style={styles.card}>
+                      <TouchableOpacity onPress={() => handleFocusEvent(item)}>
+                        <View style={styles.cardHeader}>
+                          <Text style={styles.title}>{item.title}</Text>
+                          {isPersonalityMatch && personality && (
+                            <View style={styles.matchBadge}>
+                              <Text style={styles.matchBadgeText}>⭐ Match</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.description}>{item.description}</Text>
+                        <View style={styles.cardInfo}>
+                          <Text style={styles.infoText}>Category: {item.category || "none"}</Text>
+                          {eventDate && <Text style={styles.infoText}>📅 {eventDate}</Text>}
+                          {item.location && <Text style={styles.infoText}>📍 {distanceText}</Text>}
+                        </View>
+                      </TouchableOpacity>
+
+                      {item.userId === auth.currentUser?.uid && (
+                        <Button
+                          title="Delete"
+                          onPress={() => handleDelete(item.id, item.userId)}
+                        />
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
             )}
-          </View>
-        )}
-      />
+          />
+        );
+      })()}
     </View>
   );
 }
@@ -304,7 +448,70 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { width: "100%", height: 300 },
   search: { margin: 8, borderWidth: 1, padding: 10, borderRadius: 8 },
-  title: { fontSize: 16, fontWeight: "600" },
-  card: { padding: 10, borderBottomWidth: 1, borderColor: "#ddd" },
+  title: { fontSize: 16, fontWeight: "600", flex: 1 },
+  card: { 
+    padding: 12, 
+    borderBottomWidth: 1, 
+    borderColor: "#ddd",
+    backgroundColor: "#fff",
+    marginHorizontal: 8,
+    marginVertical: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  matchBadge: {
+    backgroundColor: "#4CAF50",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  matchBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  description: {
+    color: "#666",
+    marginBottom: 8,
+    fontSize: 14,
+  },
+  cardInfo: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  infoText: {
+    fontSize: 12,
+    color: "#888",
+    marginRight: 8,
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: "700",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#f5f5f5",
+    marginTop: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#666",
+  },
   debug: { textAlign: "center", color: "#777", marginTop: 6 },
 });
