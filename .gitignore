@@ -41,3 +41,14 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Firebase Service Account Keys - NEVER COMMIT THESE!
+backend/serviceAccountKey.json
+**/serviceAccountKey.json
+*.serviceAccountKey.json
+
+# Environment variables and secrets
+.env
+.env.local
+*.key
+*.pem
